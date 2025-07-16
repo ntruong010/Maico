@@ -1,0 +1,163 @@
+<!DOCTYPE html><html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>H thng D oán SunWin & MD5</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: #0c1a2a; color: white; margin: 0; padding: 0; }
+    .container { max-width: 500px; margin: auto; padding: 20px; background: #001a33; border-radius: 12px; box-shadow: 0 0 20px #00ff00; }
+    h2, h3 { text-align: center; color: #00ccff; }
+    input, button, select { width: 100%; padding: 10px; margin: 8px 0; border-radius: 8px; border: none; font-size: 16px; }
+    button { background: #00ffcc; color: #000; font-weight: bold; cursor: pointer; }
+    .hidden { display: none; }
+    .link { color: #0ff; cursor: pointer; text-align: center; display: block; margin-top: 10px; }
+    .menu-btn { margin: 5px 0; background: #333; color: #fff; }
+    .admin-panel { background: #002244; padding: 10px; border-radius: 10px; }
+    .disabled { opacity: 0.5; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div class="container" id="auth">
+    <h2> ng Nhp</h2>
+    <input type="text" id="loginUser" placeholder="Tài khon">
+    <input type="password" id="loginPass" placeholder="Mt khu">
+    <button onclick="login()">ng Nhp</button>
+    <span class="link" onclick="toggleAuth()">Cha có tài khon? ng ký</span>
+  </div>  <div class="container hidden" id="register">
+    <h2> ng Ký</h2>
+    <input type="text" id="regUser" placeholder="Tài khon mi">
+    <input type="password" id="regPass" placeholder="Mt khu">
+    <button onclick="register()">To Tài Khon</button>
+    <span class="link" onclick="toggleAuth(true)">ã có tài khon? ng nhp</span>
+  </div>  <div class="container hidden" id="menu">
+    <h2> MENU CHC NNG</h2>
+    <div style="text-align:center">Xin chào, <b id="welcomeUser"></b> <span id="expiryTime"></span></div>
+    <button class="menu-btn" onclick="showTool('sunwin')"> Tool SunWin</button>
+    <button class="menu-btn" onclick="showTool('md5')"> Gii mã MD5</button>
+    <button class="menu-btn" onclick="logout()"> Thoát</button>
+    <div id="adminPanel" class="admin-panel hidden"></div>
+  </div>  <div class="container hidden" id="toolSunwin">
+    <h3> Tool SunWin</h3>
+    <div id="sunwinResult">(Kt ni API hin th  ây)</div>
+    <button onclick="backToMenu()"> Thoát</button>
+  </div>  <div class="container hidden" id="toolMd5">
+    <h3> Gii mã MD5</h3>
+    <input type="text" id="md5Input" placeholder="Nhp mã MD5..." />
+    <button onclick="solveMD5()">Gii MD5</button>
+    <div id="md5Result"></div>
+    <button onclick="backToMenu()"> Thoát</button>
+  </div>  <script>
+    const ADMIN_USER = 'maico09', ADMIN_PASS = '170918';
+    let currentUser = null, users = JSON.parse(localStorage.getItem('users') || '[]');
+
+    function saveUsers() { localStorage.setItem('users', JSON.stringify(users)); }
+
+    function toggleAuth(toLogin = false) {
+      document.getElementById('auth').classList.toggle('hidden', !toLogin);
+      document.getElementById('register').classList.toggle('hidden', toLogin);
+    }
+
+    function register() {
+      const user = document.getElementById('regUser').value.trim(),
+            pass = document.getElementById('regPass').value.trim();
+      if (!user || !pass) return alert("in y  thông tin.");
+      if (users.find(u => u.user === user)) return alert("Tài khon ã tn ti.");
+      users.push({ user, pass, active: false, expiry: null });
+      saveUsers(); alert("To tài khon thành công. Hãy ng nhp."); toggleAuth(true);
+    }
+
+    function login() {
+      const user = document.getElementById('loginUser').value.trim(),
+            pass = document.getElementById('loginPass').value.trim();
+      if (user === ADMIN_USER && pass === ADMIN_PASS) {
+        currentUser = { user: ADMIN_USER, isAdmin: true };
+        document.getElementById('welcomeUser').innerText = user;
+        showMenu(); return;
+      }
+      const acc = users.find(u => u.user === user && u.pass === pass);
+      if (!acc) return alert("Sai tài khon hoc mt khu.");
+      if (!acc.active) return alert("Tài khon cha c kích hot.");
+      if (acc.expiry && new Date(acc.expiry) < new Date()) return alert("Tài khon ã ht hn.");
+      currentUser = acc;
+      document.getElementById('welcomeUser').innerText = acc.user;
+      showMenu();
+    }
+
+    function showMenu() {
+      ['auth', 'register', 'toolSunwin', 'toolMd5'].forEach(id => document.getElementById(id).classList.add('hidden'));
+      document.getElementById('menu').classList.remove('hidden');
+      if (currentUser.isAdmin) {
+        let html = '<h3> Qun lý ngi dùng</h3>';
+        users.forEach((u, i) => {
+          html += `<div>
+            <b>${u.user}</b> | Trng thái: 
+            <select onchange="updateUser(${i}, 'active', this.value === 'true')">
+              <option value="true" ${u.active ? 'selected' : ''}>Bt</option>
+              <option value="false" ${!u.active ? 'selected' : ''}>Tt</option>
+            </select>
+            <br>Ht hn: <input type="datetime-local" value="${u.expiry ? new Date(u.expiry).toISOString().slice(0,16) : ''}" onchange="updateUser(${i}, 'expiry', this.value)">
+          </div><hr>`;
+        });
+        document.getElementById('adminPanel').innerHTML = html;
+        document.getElementById('adminPanel').classList.remove('hidden');
+      } else {
+        const exp = currentUser.expiry ? new Date(currentUser.expiry).toLocaleString() : 'Vnh vin';
+        document.getElementById('expiryTime').innerText = ` | Ht hn: ${exp}`;
+      }
+    }
+
+    function updateUser(index, field, value) {
+      users[index][field] = field === 'active' ? !!value : value;
+      saveUsers();
+    }
+
+    function logout() {
+      currentUser = null; location.reload();
+    }
+
+    function backToMenu() {
+      document.getElementById('toolSunwin').classList.add('hidden');
+      document.getElementById('toolMd5').classList.add('hidden');
+      document.getElementById('menu').classList.remove('hidden');
+    }
+
+    function showTool(tool) {
+      if (!currentUser || (!currentUser.isAdmin && (!currentUser.active || (currentUser.expiry && new Date(currentUser.expiry) < new Date())))) {
+        alert('Tài khon không c phép s dng.'); return;
+      }
+      document.getElementById('menu').classList.add('hidden');
+      document.getElementById(tool === 'sunwin' ? 'toolSunwin' : 'toolMd5').classList.remove('hidden');
+      if (tool === 'sunwin') fetchSunwinData();
+    }
+
+    async function fetchSunwinData() {
+      const apiURL = "https://dudoanteat-production.up.railway.app/prediction";
+      try {
+        const res = await fetch(apiURL);
+        const data = await res.json();
+        document.getElementById("sunwinResult").innerHTML = `
+          <div><b>Phiên:</b> #${data.Phien}</div>
+          <div><b>D oán:</b> ${data.Prediction}</div>
+          <div><b>Kt qu trc:</b> Phiên ${data.lastResult.phien} - ${data.lastResult.result}</div>
+        `;
+      } catch (e) {
+        document.getElementById("sunwinResult").innerHTML = " Li kt ni API.";
+      }
+    }
+
+    function solveMD5() {
+      const md5 = document.getElementById('md5Input').value.trim();
+      if (!md5) return alert('Vui lòng nhp mã MD5');
+      let value = 0;
+      for (let i = 0; i < md5.length; i++) {
+        value += md5.charCodeAt(i) * (i + 1);
+      }
+      value %= 1000;
+      let tai = (value / 1000 * 100).toFixed(2);
+      let xiu = (100 - tai).toFixed(2);
+      let result = tai > xiu ? "Tài" : "Xu";
+      document.getElementById('md5Result').innerHTML =
+        `T l Tài: <b>${tai}%</b><br>T l Xu: <b>${xiu}%</b><br>D oán: <b>${result}</b>`;
+    }
+  </script></body>
+</html>
